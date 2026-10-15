@@ -1351,3 +1351,113 @@ a.btn {
   background: var(--color-danger);
   color: var(--color-bg);
 }
+
+/* ---------- Selection mode (batch edit / export / delete) ---------- */
+
+.is-selecting .app-main {
+  padding-bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 140px);
+}
+
+.card.is-selected {
+  box-shadow: 0 0 0 3px var(--color-accent);
+}
+
+.card__check {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(20, 12, 16, 0.45);
+  color: #fff;
+}
+
+.card__check.is-on {
+  border-color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.selbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--tabbar-height) + var(--safe-bottom));
+  z-index: var(--z-tabbar);
+  padding: var(--space-2) calc(var(--safe-right) + var(--space-4)) var(--space-3) calc(var(--safe-left) + var(--space-4));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.selbar__inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.selbar__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.selbar__row .btn {
+  min-height: var(--tap-min);
+}
+
+.selbar__count {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.selbar__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.selbar__actions .btn {
+  flex: 1;
+  min-height: var(--tap-min);
+}
+
+.selbar__actions .icon-btn--danger {
+  background: var(--color-danger-soft);
+  border-radius: var(--radius-md);
+}
+
+.selbar button:disabled {
+  opacity: 0.4;
+}
+
+.bulk-edit,
+.export {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.export__missing-title {
+  margin-top: var(--space-2);
+}
+
+.export .assign-item__head .btn {
+  flex: none;
+  min-height: var(--tap-min);
+  margin-left: auto;
+}
+
+/* Keep toasts above the selection bar. */
+.is-selecting .toast {
+  bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 132px);
+}

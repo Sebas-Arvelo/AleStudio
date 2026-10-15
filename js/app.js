@@ -26,12 +26,13 @@ import {
 } from './db.js';
 import { extractVideoMeta } from './media.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 
 const LS_KEYS = {
   groupBy: 'alestudio.groupBy',
   sort: 'alestudio.sort',
   filtersOpen: 'alestudio.filtersOpen',
+  importCopy: 'alestudio.importCopy',
 };
 
 const NO_TYPE = '__none__';
@@ -119,6 +120,8 @@ const ICONS = {
   trash: '<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/>',
   filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
   share: '<path d="M12 15V3.5M8 7l4-4 4 4M6 11H5v9.5h14V11h-1"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
 };
 
 function icon(name, size = 20) {
@@ -221,6 +224,9 @@ const state = {
   search: '',
   filters: { orientation: new Set(), bucket: new Set(), type: new Set(), favorites: false },
   busy: false,
+  /** Library selection mode (batch edit / export / delete). */
+  selecting: false,
+  selected: new Set(),
 };
 
 /** Persistent DOM references. */
@@ -235,6 +241,10 @@ let relinkTargetId = null;
 /** Backup waiting in the "Respaldo listo" sheet, or null. */
 let pendingBackup = null;
 let confirmCancel = null;
+/** Export sheet context, or null. */
+let exportCtx = null;
+/** Body of the open batch-edit sheet, or null. */
+let bulkEditBody = null;
 let toastTimer = null;
 
 function findVideo(id) {
@@ -460,6 +470,7 @@ function buildShell() {
   }
 
   els.main = h('main', { class: 'app-main', id: 'view' });
+  els.selectBar = h('div', { class: 'selbar', role: 'region', 'aria-label': 'Videos seleccionados', hidden: true });
 
   els.fab = h(
     'button',
@@ -516,7 +527,7 @@ function buildShell() {
   els.toast = h('div', { class: 'toast', role: 'status', 'aria-live': 'polite' });
 
   root.replaceChildren(
-    h('div', { class: 'app' }, header, els.banner, els.main, els.fab, tabbar),
+    h('div', { class: 'app' }, header, els.banner, els.main, els.fab, els.selectBar, tabbar),
     inputs,
     els.sheetRoot,
     els.overlayRoot,
@@ -536,7 +547,9 @@ function renderView() {
     if (active) btn.setAttribute('aria-current', 'page');
     else btn.removeAttribute('aria-current');
   }
-  els.fab.hidden = Boolean(state.loadError) || tab.id !== 'library' || state.videos.length === 0;
+  if (state.selecting && (tab.id !== 'library' || state.loadError || !state.videos.length)) exitSelection();
+  els.fab.hidden = Boolean(state.loadError) || tab.id !== 'library' || state.videos.length === 0 || state.selecting;
+  document.documentElement.classList.toggle('is-selecting', state.selecting);
   els.results = null;
   els.resultBar = null;
 
@@ -546,6 +559,7 @@ function renderView() {
   else if (tab.id === 'settings') view = buildSettings();
   else view = buildLibrary();
   els.main.replaceChildren(view);
+  renderSelectBar();
 }
 
 function buildLoadError() {
@@ -689,15 +703,28 @@ function buildCard(video, map) {
 
   const typeChip = h('span', { class: 'type-chip' + (type ? '' : ' type-chip--none') }, type ? colorDot(type.color) : null, h('span', { class: 'type-chip__label' }, type ? type.label : 'Sin tipo'));
 
+  const selecting = state.selecting;
+  const selected = selecting && state.selected.has(video.id);
+  if (selecting) thumb.append(h('span', { class: 'card__check' + (selected ? ' is-on' : ''), 'aria-hidden': 'true' }, selected ? icon('check', 16) : null));
+
   const openBtn = h(
     'button',
-    {
-      type: 'button',
-      class: 'card__open',
-      'data-action': 'open-video',
-      'data-id': video.id,
-      'aria-label': `Abrir ${video.title || 'video'}. ${orientationLabel}, ${formatDuration(video.duration)}`,
-    },
+    selecting
+      ? {
+          type: 'button',
+          class: 'card__open',
+          'data-action': 'select-video',
+          'data-id': video.id,
+          'aria-pressed': String(selected),
+          'aria-label': `Seleccionar ${video.title || 'video'}. ${orientationLabel}, ${formatDuration(video.duration)}`,
+        }
+      : {
+          type: 'button',
+          class: 'card__open',
+          'data-action': 'open-video',
+          'data-id': video.id,
+          'aria-label': `Abrir ${video.title || 'video'}. ${orientationLabel}, ${formatDuration(video.duration)}`,
+        },
     thumb,
     h('span', { class: 'card__body' }, h('span', { class: 'card__title' }, video.title || 'Sin título'), typeChip)
   );
@@ -715,7 +742,7 @@ function buildCard(video, map) {
     icon('star', 18)
   );
 
-  return h('li', { class: 'card' }, openBtn, favBtn);
+  return h('li', { class: 'card' + (selected ? ' is-selected' : '') }, openBtn, selecting ? null : favBtn);
 }
 
 function buildChip({ label, on, kind, value, color = null, withStar = false }) {
@@ -825,6 +852,18 @@ function buildToolbar() {
     SORTS.map((s) => h('option', { value: s.id, selected: s.id === state.sort }, s.label))
   );
 
+  const selectBtn = h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn--soft btn--sm' + (state.selecting ? ' is-on' : ''),
+      'data-action': 'select-mode',
+      'aria-pressed': String(state.selecting),
+    },
+    icon('check', 18),
+    state.selecting ? 'Listo' : 'Seleccionar'
+  );
+
   els.resultBar = h('div', { class: 'result-bar' });
 
   return h(
@@ -832,7 +871,7 @@ function buildToolbar() {
     { class: 'toolbar' },
     search,
     h('div', { class: 'toolbar__block' }, h('p', { class: 'toolbar__label' }, 'Agrupar por'), segmented),
-    h('div', { class: 'toolbar__row' }, filtersBtn, sortSelect),
+    h('div', { class: 'toolbar__row' }, filtersBtn, selectBtn, sortSelect),
     state.filtersOpen ? buildFilterPanel() : null,
     els.resultBar
   );
@@ -899,6 +938,7 @@ function fillResults() {
   els.resultBar.replaceChildren(...barItems);
 
   if (!list.length) {
+    renderSelectBar();
     els.results.replaceChildren(
       h(
         'div',
@@ -928,6 +968,7 @@ function fillResults() {
     )
   );
   els.results.replaceChildren(...sections);
+  renderSelectBar();
 }
 
 // ---------------------------------------------------------------------------
@@ -1128,7 +1169,7 @@ async function saveTypes(list) {
 // Adding videos
 // ---------------------------------------------------------------------------
 
-async function importFiles(fileList) {
+async function importFiles(fileList, { saveCopies = false } = {}) {
   const all = Array.from(fileList || []);
   const files = all.filter(isVideoFile);
   const skipped = all.length - files.length;
@@ -1141,6 +1182,8 @@ async function importFiles(fileList) {
   let failed = 0;
   let duplicates = 0;
   let lastError = null;
+  let withCopy = 0;
+  let copyError = null;
   // The iOS picker does not show which videos are already in the library:
   // skip files with the same name and exact size as an existing one.
   const fileKey = (name, size) => `${name || ''}\n${size || 0}`;
@@ -1170,7 +1213,18 @@ async function importFiles(fileList) {
           favorite: false,
           thumbnail: meta.thumbnail,
         });
-        added.push(record);
+        let saved = record;
+        // After the first failed copy (usually a full iPhone) the rest are added without one.
+        if (saveCopies && !copyError) {
+          try {
+            saved = (await saveBlob(record.id, file)) || record;
+            withCopy += 1;
+          } catch (err) {
+            copyError = err;
+            console.error(err);
+          }
+        }
+        added.push(saved);
         sessionFiles.set(record.id, file);
         known.add(fileKey(file.name, file.size));
       } catch (err) {
@@ -1204,8 +1258,16 @@ async function importFiles(fileList) {
     toast(`No se ${plural(failed, 'pudo agregar', 'pudieron agregar')} ${videosLabel(failed)}.${reason ? ' ' + reason : ''}`, 'error');
   } else if (!added.length) {
     toast(notes.join(' '));
+  } else if (copyError) {
+    const missing = added.length - withCopy;
+    const reason = errorMessage(copyError, '');
+    toast(
+      `Se ${plural(added.length, 'agregó', 'agregaron')} ${videosLabel(added.length)}, pero ${missing} ${plural(missing, 'quedó', 'quedaron')} sin copia.${reason ? ' ' + reason : ''}`,
+      'error'
+    );
   } else {
-    toast([`Se ${plural(added.length, 'agregó', 'agregaron')} ${videosLabel(added.length)}.`, ...notes].join(' '));
+    const copies = saveCopies ? ' con su copia para exportar' : '';
+    toast([`Se ${plural(added.length, 'agregó', 'agregaron')} ${videosLabel(added.length)}${copies}.`, ...notes].join(' '));
   }
 
   if (added.length) {
@@ -1374,10 +1436,13 @@ function renderDetailCopy(ctx = detail) {
   // replaceChildren() would print a null argument as text, so build the list first.
   const items = [
     h('div', { class: 'switch-row' }, h('p', { class: 'field__label', id: 'd-copy-label' }, 'Guardar copia dentro de la app'), toggle),
-    h('p', { class: 'hint' }, 'Usa espacio de tu iPhone y te permite reproducir el video aquí.'),
+    h('p', { class: 'hint' }, 'Usa espacio de tu iPhone. Te permite reproducir el video aquí y mandarlo a CapCut, TikTok o Edits.'),
   ];
   if (video.hasCopy) {
-    items.push(h('button', { type: 'button', class: 'btn btn--soft btn--block', 'data-action': 'detail-remove-copy' }, 'Quitar copia'));
+    items.push(
+      h('button', { type: 'button', class: 'btn btn--primary btn--block', 'data-action': 'detail-export' }, icon('share', 18), 'Exportar a CapCut, TikTok o Edits'),
+      h('button', { type: 'button', class: 'btn btn--soft btn--block', 'data-action': 'detail-remove-copy' }, 'Quitar copia')
+    );
   }
   ctx.els.copy.replaceChildren(...items);
 }
@@ -1562,6 +1627,10 @@ async function attachCopy(id, file, refreshMeta) {
       renderDetailDynamic(ctx);
       run(() => renderDetailMedia(ctx));
     }
+    if (exportCtx && exportCtx.ids.includes(id)) {
+      const ectx = exportCtx;
+      run(() => prepareExport(ectx));
+    }
   }
 }
 
@@ -1591,6 +1660,346 @@ function pickRelinkFile(id) {
   relinkTargetId = id;
   els.relinkInput.value = '';
   els.relinkInput.click();
+}
+
+// ---------------------------------------------------------------------------
+// Add sheet (choose whether the new videos keep an in-app copy)
+// ---------------------------------------------------------------------------
+
+function importCopyOn() {
+  return lsGet(LS_KEYS.importCopy, '0') === '1';
+}
+
+function buildCopySwitch(on) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'switch' + (on ? ' is-on' : ''),
+      role: 'switch',
+      'aria-checked': String(on),
+      'aria-labelledby': 'add-copy-label',
+      'data-action': 'add-copy-toggle',
+    },
+    h('span', { class: 'switch__knob' })
+  );
+}
+
+function openAddSheet() {
+  openSheet({
+    title: 'Agregar videos',
+    body: h(
+      'div',
+      { class: 'field copy-box' },
+      h('div', { class: 'switch-row' }, h('p', { class: 'field__label', id: 'add-copy-label' }, 'Guardar copia para exportar'), buildCopySwitch(importCopyOn())),
+      h(
+        'p',
+        { class: 'hint' },
+        'Actívalo si vas a mandar estos videos a CapCut, TikTok o Edits. Cada copia ocupa espacio en tu iPhone; después de exportar puedes quitarla.'
+      )
+    ),
+    footer: h('button', { type: 'button', class: 'btn btn--primary btn--block', 'data-action': 'pick-videos' }, icon('plus', 18), 'Elegir videos'),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Selection mode and batch actions
+// ---------------------------------------------------------------------------
+
+function selectedVideos() {
+  return [...state.selected].map(findVideo).filter(Boolean);
+}
+
+function exitSelection() {
+  state.selecting = false;
+  state.selected.clear();
+}
+
+function renderSelectBar() {
+  const bar = els.selectBar;
+  if (!bar) return;
+  if (!state.selecting || state.tab !== 'library') {
+    bar.hidden = true;
+    bar.replaceChildren();
+    return;
+  }
+  // Drop ids of videos deleted meanwhile.
+  for (const id of [...state.selected]) if (!findVideo(id)) state.selected.delete(id);
+  const n = state.selected.size;
+  const visible = filteredVideos();
+  const allOn = visible.length > 0 && visible.every((v) => state.selected.has(v.id));
+  const disabled = n === 0;
+  bar.hidden = false;
+  bar.replaceChildren(
+    h(
+      'div',
+      { class: 'selbar__inner' },
+      h(
+        'div',
+        { class: 'selbar__row' },
+        h('p', { class: 'selbar__count', 'aria-live': 'polite' }, n ? `${n} ${plural(n, 'seleccionado', 'seleccionados')}` : 'Toca los videos'),
+        h('button', { type: 'button', class: 'btn btn--text btn--sm', 'data-action': 'select-all' }, allOn ? 'Quitar todos' : 'Seleccionar todos'),
+        h('button', { type: 'button', class: 'btn btn--text btn--sm', 'data-action': 'select-mode' }, 'Cancelar')
+      ),
+      h(
+        'div',
+        { class: 'selbar__actions' },
+        h('button', { type: 'button', class: 'btn btn--soft', 'data-action': 'bulk-edit', disabled }, icon('edit', 18), 'Editar'),
+        h('button', { type: 'button', class: 'btn btn--primary', 'data-action': 'bulk-export', disabled }, icon('share', 18), 'Exportar'),
+        h('button', { type: 'button', class: 'icon-btn icon-btn--danger', 'data-action': 'bulk-delete', disabled, 'aria-label': 'Eliminar seleccionados' }, icon('trash', 20))
+      )
+    )
+  );
+}
+
+/** Applies patchFor(video) (or skips it when it returns null) to every selected video. */
+async function applyBulk(patchFor, message) {
+  const videos = selectedVideos();
+  if (!videos.length || state.busy) return;
+  let changed = 0;
+  try {
+    for (let i = 0; i < videos.length; i += 1) {
+      const patch = patchFor(videos[i]);
+      if (!patch) continue;
+      if (videos.length > 3) showBusy(`Guardando ${i + 1} de ${videos.length}…`, i / videos.length);
+      replaceLocal(await updateVideo(videos[i].id, patch));
+      changed += 1;
+    }
+  } finally {
+    hideBusy();
+    renderView();
+    renderBulkEdit();
+  }
+  if (changed) toast(message(videos.length));
+}
+
+function renderBulkEdit() {
+  if (!bulkEditBody || !bulkEditBody.isConnected) return;
+  const videos = selectedVideos();
+  const map = typeMap();
+  const all = (fn) => videos.length > 0 && videos.every(fn);
+  const chip = (label, on, action, attrs, color = null) =>
+    h('button', { type: 'button', class: 'chip' + (on ? ' is-on' : ''), 'data-action': action, 'aria-pressed': String(on), ...attrs }, color ? colorDot(color) : null, label);
+  const section = (label, chips) => h('div', { class: 'field' }, h('p', { class: 'field__label' }, label), h('div', { class: 'chip-row' }, chips));
+
+  bulkEditBody.replaceChildren(
+    h('p', { class: 'hint' }, 'Cada opción que toques se aplica a todos los videos seleccionados.'),
+    section('Tipo de contenido', [
+      ...state.settings.contentTypes.map((t) => chip(t.label, all((v) => typeIdOf(v, map) === t.id), 'bulk-type', { 'data-type': t.id }, t.color)),
+      chip('Sin tipo', all((v) => typeIdOf(v, map) === ''), 'bulk-type', { 'data-type': '' }),
+    ]),
+    section('Orientación', [
+      ...MANUAL_ORIENTATIONS.map((key) => chip(ORIENTATION_LABELS[key], all((v) => v.orientationManual && v.orientation === key), 'bulk-orientation', { 'data-value': key })),
+      chip('Automática', all((v) => !v.orientationManual), 'bulk-orientation', { 'data-value': 'auto' }),
+    ]),
+    section('Favoritos', [
+      chip('Marcar como favoritos', all((v) => v.favorite === true), 'bulk-fav', { 'data-value': '1' }),
+      chip('Quitar de favoritos', all((v) => v.favorite !== true), 'bulk-fav', { 'data-value': '0' }),
+    ])
+  );
+}
+
+function openBulkEdit() {
+  const n = selectedVideos().length;
+  if (!n) return;
+  const body = h('div', { class: 'bulk-edit' });
+  bulkEditBody = body;
+  openSheet({
+    title: `Editar ${videosLabel(n)}`,
+    body,
+    footer: h('button', { type: 'button', class: 'btn btn--primary btn--block', 'data-action': 'close-sheet' }, 'Listo'),
+    onClose: () => {
+      if (bulkEditBody === body) bulkEditBody = null;
+    },
+  });
+  renderBulkEdit();
+}
+
+async function bulkDelete() {
+  const videos = selectedVideos();
+  if (!videos.length || state.busy) return;
+  const copies = videos.filter((v) => v.hasCopy).length;
+  const ok = await confirmDialog({
+    title: `¿Eliminar ${videosLabel(videos.length)}?`,
+    message: `Se ${plural(videos.length, 'quitará', 'quitarán')} de tu biblioteca${copies ? ', junto con las copias guardadas en la app' : ''}. Los originales en Fotos no se tocan. No se puede deshacer.`,
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return;
+  let deleted = 0;
+  try {
+    for (let i = 0; i < videos.length; i += 1) {
+      if (videos.length > 3) showBusy(`Eliminando ${i + 1} de ${videos.length}…`, i / videos.length);
+      await deleteVideo(videos[i].id);
+      state.videos = state.videos.filter((v) => v.id !== videos[i].id);
+      state.selected.delete(videos[i].id);
+      sessionFiles.delete(videos[i].id);
+      deleted += 1;
+    }
+  } finally {
+    hideBusy();
+    if (!state.selected.size) exitSelection();
+    renderView();
+  }
+  toast(`${videosLabel(deleted)} ${plural(deleted, 'eliminado', 'eliminados')}.`);
+}
+
+// ---------------------------------------------------------------------------
+// Export to editing apps (CapCut, TikTok, Edits) through the share sheet
+// ---------------------------------------------------------------------------
+
+function videoMimeType(name) {
+  if (/\.mov$/i.test(name)) return 'video/quicktime';
+  if (/\.webm$/i.test(name)) return 'video/webm';
+  return 'video/mp4';
+}
+
+/** A named File for the share sheet: editing apps rely on the extension and MIME type. */
+function toShareFile(blob, video) {
+  const fallback = `${(video.title || 'video').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'video'}.mov`;
+  const name = video.fileName || (blob instanceof File && blob.name) || fallback;
+  const type = blob.type && blob.type.startsWith('video/') ? blob.type : videoMimeType(name);
+  if (blob instanceof File && blob.name === name && blob.type === type) return blob;
+  return new File([blob], name, { type });
+}
+
+function canShareFiles(files) {
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try {
+    return navigator.canShare({ files });
+  } catch (_) {
+    return false;
+  }
+}
+
+function openExportSheet(ids) {
+  const body = h('div', { class: 'export' });
+  const ctx = { ids: ids.slice(), files: new Map(), ready: false, body, entry: null };
+  exportCtx = ctx;
+  ctx.entry = openSheet({
+    title: 'Exportar a edición',
+    body,
+    onClose: () => {
+      if (exportCtx === ctx) exportCtx = null;
+    },
+  });
+  run(() => prepareExport(ctx));
+}
+
+/** Loads the stored copies before the tap that opens the share sheet (iOS needs that tap to call share directly). */
+async function prepareExport(ctx) {
+  ctx.ready = false;
+  renderExport(ctx);
+  const files = new Map();
+  for (const id of ctx.ids) {
+    const video = findVideo(id);
+    if (!video || !video.hasCopy) continue;
+    let blob = null;
+    try {
+      blob = await getBlob(id);
+    } catch (err) {
+      console.error(err);
+    }
+    if (blob) files.set(id, toShareFile(blob, video));
+  }
+  if (exportCtx !== ctx) return;
+  ctx.files = files;
+  ctx.ready = true;
+  renderExport(ctx);
+}
+
+function renderExport(ctx) {
+  if (exportCtx !== ctx || !ctx.body.isConnected) return;
+  const videos = ctx.ids.map(findVideo).filter(Boolean);
+  const missing = ctx.ready ? videos.filter((v) => !ctx.files.has(v.id)) : [];
+  const readyCount = ctx.files.size;
+  const share = ctx.ready && readyCount > 0 && canShareFiles([...ctx.files.values()]);
+  const items = [];
+
+  if (!ctx.ready) {
+    items.push(h('p', { class: 'panel__text' }, 'Preparando videos…'));
+  } else if (readyCount) {
+    items.push(
+      h('p', { class: 'panel__text' }, `${videosLabel(readyCount)} ${plural(readyCount, 'listo', 'listos')} para exportar.`),
+      h(
+        'p',
+        { class: 'hint' },
+        share
+          ? 'Se abrirá el menú de compartir: elige CapCut, TikTok o Edits. Si no aparecen, toca “Guardar video” y ábrelo desde la app de edición.'
+          : 'Este navegador no puede compartir videos; se van a descargar.'
+      ),
+      h(
+        'button',
+        { type: 'button', class: 'btn btn--primary btn--block btn--lg', 'data-action': 'export-share' },
+        icon('share', 20),
+        share ? `Exportar ${videosLabel(readyCount)}` : `Descargar ${videosLabel(readyCount)}`
+      )
+    );
+  }
+
+  if (missing.length) {
+    items.push(
+      h('p', { class: 'field__label export__missing-title' }, `${missing.length} sin copia guardada`),
+      h('p', { class: 'hint' }, 'AleStudio no puede tomarlos de Fotos por su cuenta. Elige cada uno otra vez para guardar su copia.'),
+      h(
+        'ul',
+        { class: 'assign-list' },
+        missing.map((video) =>
+          h(
+            'li',
+            { class: 'assign-item' },
+            h(
+              'div',
+              { class: 'assign-item__head' },
+              buildThumb(video, 'assign-item__thumb'),
+              h('div', { class: 'assign-item__info' }, h('p', { class: 'assign-item__title' }, video.title || 'Sin título'), h('p', { class: 'hint' }, formatDuration(video.duration))),
+              h('button', { type: 'button', class: 'btn btn--soft btn--sm', 'data-action': 'export-relink', 'data-id': video.id }, 'Elegir')
+            )
+          )
+        )
+      )
+    );
+  }
+  ctx.body.replaceChildren(...items);
+}
+
+function downloadFile(file) {
+  const url = URL.createObjectURL(file);
+  const link = h('a', { href: url, download: file.name, class: 'visually-hidden' }, file.name);
+  document.body.append(link);
+  link.click();
+  setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 60000);
+}
+
+/** After a successful export: offer to free the space taken by the copies. */
+async function offerRemoveCopies(ids) {
+  const videos = ids.map(findVideo).filter((v) => v && v.hasCopy);
+  if (!videos.length) return;
+  const size = videos.reduce((sum, v) => sum + (v.fileSize || 0), 0);
+  const ok = await confirmDialog({
+    title: plural(videos.length, '¿Quitar la copia?', '¿Quitar las copias?'),
+    message: `Liberas ${size ? formatFileSize(size) : 'espacio'} en tu iPhone. Los videos siguen en Fotos y sus fichas se quedan en AleStudio.`,
+    confirmLabel: plural(videos.length, 'Quitar copia', 'Quitar copias'),
+    cancelLabel: 'Conservar',
+  });
+  if (!ok) return;
+  const ctx = detail;
+  try {
+    for (const video of videos) {
+      await deleteBlob(video.id);
+      await refreshVideo(video.id);
+    }
+    toast(plural(videos.length, 'Copia quitada.', 'Copias quitadas.'));
+  } finally {
+    renderView();
+    if (ctx && detail === ctx && videos.some((v) => v.id === ctx.id)) {
+      renderDetailCopy(ctx);
+      run(() => renderDetailMedia(ctx));
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1749,8 +2158,128 @@ const actions = {
 
   'add-videos'() {
     if (state.busy) return;
+    openAddSheet();
+  },
+
+  'add-copy-toggle'(el) {
+    const on = !importCopyOn();
+    lsSet(LS_KEYS.importCopy, on ? '1' : '0');
+    el.replaceWith(buildCopySwitch(on));
+  },
+
+  /** Opens the picker directly inside this tap (iOS requires a user gesture). */
+  'pick-videos'() {
+    if (state.busy) return;
+    closeSheet();
     els.videoInput.value = '';
     els.videoInput.click();
+  },
+
+  'select-mode'() {
+    if (state.selecting) exitSelection();
+    else state.selecting = true;
+    renderView();
+  },
+
+  'select-video'(el) {
+    const id = el.getAttribute('data-id');
+    if (!findVideo(id)) return;
+    if (state.selected.has(id)) state.selected.delete(id);
+    else state.selected.add(id);
+    fillResults();
+  },
+
+  'select-all'() {
+    const visible = filteredVideos();
+    const allOn = visible.length > 0 && visible.every((v) => state.selected.has(v.id));
+    for (const v of visible) {
+      if (allOn) state.selected.delete(v.id);
+      else state.selected.add(v.id);
+    }
+    fillResults();
+  },
+
+  'bulk-edit'() {
+    openBulkEdit();
+  },
+
+  async 'bulk-type'(el) {
+    const typeId = el.getAttribute('data-type') || '';
+    const type = state.settings.contentTypes.find((t) => t.id === typeId);
+    if (typeId && !type) return;
+    await applyBulk(
+      (v) => (v.contentType === typeId ? null : { contentType: typeId }),
+      (n) => (type ? `“${type.label}” asignado a ${videosLabel(n)}.` : `${videosLabel(n)} sin tipo.`)
+    );
+  },
+
+  async 'bulk-orientation'(el) {
+    const value = el.getAttribute('data-value');
+    if (value !== 'auto' && !MANUAL_ORIENTATIONS.includes(value)) return;
+    await applyBulk(
+      (v) => (value === 'auto' ? { orientation: detectOrientation(v.width, v.height), orientationManual: false } : { orientation: value, orientationManual: true }),
+      (n) => (value === 'auto' ? `Orientación automática en ${videosLabel(n)}.` : `${videosLabel(n)} ${plural(n, 'marcado', 'marcados')} como ${ORIENTATION_LABELS[value].toLowerCase()}.`)
+    );
+  },
+
+  async 'bulk-fav'(el) {
+    const on = el.getAttribute('data-value') === '1';
+    await applyBulk(
+      (v) => ((v.favorite === true) === on ? null : { favorite: on }),
+      (n) => (on ? `${videosLabel(n)} en favoritos.` : `${videosLabel(n)} fuera de favoritos.`)
+    );
+  },
+
+  async 'bulk-delete'() {
+    await bulkDelete();
+  },
+
+  'bulk-export'() {
+    const ids = selectedVideos().map((v) => v.id);
+    if (ids.length) openExportSheet(ids);
+  },
+
+  'detail-export'() {
+    if (detail) openExportSheet([detail.id]);
+  },
+
+  'export-relink'(el) {
+    const id = el.getAttribute('data-id');
+    if (findVideo(id) && !state.busy) pickRelinkFile(id);
+  },
+
+  /** navigator.share is called directly inside this tap; the files were loaded when the sheet opened. */
+  'export-share'() {
+    const ctx = exportCtx;
+    if (!ctx || !ctx.ready) return undefined;
+    const ids = ctx.ids.filter((id) => ctx.files.has(id));
+    const files = ids.map((id) => ctx.files.get(id));
+    if (!files.length) return undefined;
+    if (!canShareFiles(files)) {
+      files.forEach(downloadFile);
+      toast(plural(files.length, 'Video descargado.', 'Videos descargados.'));
+      return undefined;
+    }
+    let sharing;
+    try {
+      sharing = navigator.share({ files });
+    } catch (err) {
+      sharing = Promise.reject(err);
+    }
+    return Promise.resolve(sharing).then(
+      async () => {
+        if (ctx.entry) closeSheet(ctx.entry);
+        await offerRemoveCopies(ids);
+      },
+      (err) => {
+        if (err && err.name === 'AbortError') return; // she closed the share sheet
+        console.warn(err);
+        toast(
+          files.length > 1 ? 'No se pudo abrir el menú para compartir. Prueba con menos videos a la vez.' : 'No se pudo abrir el menú para compartir.',
+          'error'
+        );
+      }
+    );
   },
 
   'dismiss-banner'() {
@@ -1984,7 +2513,7 @@ const changeHandlers = {
   async 'files-picked'(el) {
     const files = Array.from(el.files || []);
     el.value = '';
-    if (files.length) await importFiles(files);
+    if (files.length) await importFiles(files, { saveCopies: importCopyOn() });
   },
 
   async 'relink-picked'(el) {

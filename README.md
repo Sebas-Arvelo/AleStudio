@@ -11,7 +11,9 @@ AleStudio es una app para iPhone donde Alejandra organiza sus videos. Ella elige
 - **Los agrupa por tipo de contenido**: Tutorial, Vlog, Reel / Tendencia, Colaboración / Marca, Detrás de cámaras, Lifestyle y Otro. Los tipos se pueden renombrar, cambiar de color, agregar o eliminar en **Ajustes**.
 - Guarda de cada video una miniatura, título, notas y la marca de favorito.
 - Tiene buscador, filtros, orden (más recientes, más cortos, etc.) y una pestaña **Resumen** con el conteo por orientación, duración y tipo.
-- Opcionalmente guarda una **copia del video dentro de la app** para reproducirlo ahí mismo.
+- Opcionalmente guarda una **copia del video dentro de la app** para reproducirlo ahí mismo. Se puede activar al agregar videos (“Guardar copia para exportar”).
+- **Exporta a CapCut, TikTok o Edits**: los videos con copia se mandan por el menú de compartir del iPhone; después la app ofrece quitar la copia para liberar espacio.
+- **Edición en lote**: con “Seleccionar” se marcan varios videos y se les cambia juntos el tipo, la orientación o favorito, o se eliminan.
 
 Funciona sin internet después de la primera vez que se abre, y todos los datos se quedan en el iPhone: no hay cuentas, servidores ni seguimiento.
 

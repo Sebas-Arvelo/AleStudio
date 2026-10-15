@@ -1,7 +1,7 @@
 /* AleStudio service worker — offline app shell.
  * Bump CACHE_VERSION whenever any precached file changes, so installed
  * copies pick up the new version. */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `alestudio-${CACHE_VERSION}`;
 const CACHE_PREFIX = 'alestudio-';
 
