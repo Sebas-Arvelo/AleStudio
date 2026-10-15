@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AleStudio</title>
+  <meta name="description" content="Organiza tus videos por orientación, duración y tipo de contenido.">
+
+  <!-- Home screen (standalone) mode -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AleStudio">
+  <meta name="application-name" content="AleStudio">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#FFF7F5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#151114" media="(prefers-color-scheme: dark)">
+
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Minimal loading state; js/app.js replaces the contents of #app -->
+    <div class="app-loading" role="status" aria-live="polite">
+      <img class="app-loading__logo" src="./icons/icon-192.png" alt="" width="72" height="72">
+      <p class="app-loading__title">AleStudio</p>
+      <div class="app-loading__spinner" aria-hidden="true"></div>
+      <p class="app-loading__text">Cargando tus videos…</p>
+    </div>
+  </div>
+
+  <noscript>
+    <div class="noscript-message">
+      <p><strong>AleStudio necesita JavaScript para funcionar.</strong></p>
+      <p>Actívalo en Ajustes &gt; Safari &gt; Avanzado &gt; JavaScript y vuelve a abrir la app.</p>
+    </div>
+  </noscript>
+
+  <script>
+    // Shown instead of an endless spinner when the app code cannot be loaded
+    // (for example: first launch without internet, or an incomplete offline copy).
+    function showLoadFailure() {
+      var box = document.querySelector('.app-loading');
+      if (!box) return;
+      var spinner = box.querySelector('.app-loading__spinner');
+      var text = box.querySelector('.app-loading__text');
+      if (spinner) spinner.hidden = true;
+      if (text) text.textContent = 'No se pudo cargar la app. Conéctate a internet y toca Reintentar.';
+      if (box.querySelector('button')) return;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'app-loading__retry';
+      button.textContent = 'Reintentar';
+      button.addEventListener('click', function () { window.location.reload(); });
+      box.appendChild(button);
+    }
+  </script>
+  <script type="module" src="./js/app.js" onerror="showLoadFailure()"></script>
+  <script>
+    // Service worker: relative URL and scope so the app works from any subpath.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function (err) {
+          console.warn('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

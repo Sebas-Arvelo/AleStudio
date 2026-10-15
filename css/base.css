@@ -1,0 +1,435 @@
+/* ==========================================================================
+   AleStudio — base.css  (design tokens, reset, safe-area helpers)
+   Owner: SHELL agent. App-specific components live in css/app.css.
+
+   DESIGN TOKENS (CSS custom properties on :root; dark mode overrides the
+   color and shadow tokens automatically via prefers-color-scheme)
+
+   Colors
+     --color-bg              page background
+     --color-surface         cards, lists, bars
+     --color-surface-2       inset areas, input backgrounds, chips
+     --color-elevated        sheets, dialogs, menus
+     --color-text            primary text
+     --color-text-muted      secondary text
+     --color-text-faint      placeholders, disabled text
+     --color-border          hairlines and dividers
+     --color-border-strong   input borders, stronger dividers
+     --color-accent          main brand color (buttons, active states, links)
+     --color-accent-strong   pressed / hover state of the accent
+     --color-accent-soft     tinted accent background (selected chips, badges)
+     --color-on-accent       text/icons on top of accent or gradient
+     --color-coral           gradient start (matches the icon)
+     --color-magenta         gradient end (matches the icon)
+     --gradient-brand        coral -> magenta gradient (hero buttons, headers)
+     --color-success, --color-success-soft
+     --color-warning, --color-warning-soft
+     --color-danger,  --color-danger-soft
+     --color-overlay         backdrop behind sheets and dialogs
+     --color-focus           focus ring color
+
+   Spacing (4px scale)
+     --space-1 4px   --space-2 8px   --space-3 12px  --space-4 16px
+     --space-5 20px  --space-6 24px  --space-7 32px  --space-8 48px
+
+   Radius
+     --radius-sm 8px  --radius-md 12px  --radius-lg 16px  --radius-xl 24px
+     --radius-pill 999px
+
+   Typography
+     --font-sans, --font-mono
+     --text-xs 12px  --text-sm 14px  --text-md 16px  --text-lg 18px
+     --text-xl 22px  --text-2xl 28px
+     --weight-regular 400  --weight-medium 500  --weight-semibold 600  --weight-bold 700
+     --leading-tight 1.2   --leading-normal 1.45
+
+   Shadows
+     --shadow-sm  --shadow-md  --shadow-lg
+
+   Layout
+     --tap-min 44px          minimum tap target
+     --header-height 52px    top bar height (without safe area)
+     --tabbar-height 56px    bottom bar height (without safe area)
+     --content-max 720px     max content width on large screens
+     --safe-top, --safe-right, --safe-bottom, --safe-left   env(safe-area-inset-*)
+
+   Motion
+     --duration-fast 120ms  --duration-normal 220ms  --ease-out
+
+   Layers
+     --z-header 10  --z-tabbar 10  --z-sheet 100  --z-toast 200
+
+   HELPER CLASSES
+     .safe-top / .safe-bottom / .safe-left / .safe-right / .safe-x / .safe-all
+         add the matching safe-area inset as padding
+     .visually-hidden   screen-reader-only text
+     .app-loading       initial loading state used by index.html
+     .noscript-message  message shown when JavaScript is disabled
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* Colors — light */
+  --color-bg: #FFF7F5;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #FBEDEA;
+  --color-elevated: #FFFFFF;
+  --color-text: #2A1A22;
+  --color-text-muted: #75606A;
+  --color-text-faint: #A8959D;
+  --color-border: #F1E0DD;
+  --color-border-strong: #DDC5C4;
+  --color-accent: #D42A6C;
+  --color-accent-strong: #B41D58;
+  --color-accent-soft: #FDE3EC;
+  --color-on-accent: #FFFFFF;
+  --color-coral: #FF7A59;
+  --color-magenta: #D6249F;
+  --gradient-brand: linear-gradient(135deg, var(--color-coral) 0%, var(--color-magenta) 100%);
+  --color-success: #1F8A5B;
+  --color-success-soft: #DDF3E8;
+  --color-warning: #A86400;
+  --color-warning-soft: #FCEBCB;
+  --color-danger: #C62F3B;
+  --color-danger-soft: #FBE1E3;
+  --color-overlay: rgba(42, 26, 34, 0.45);
+  --color-focus: #D42A6C;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --leading-tight: 1.2;
+  --leading-normal: 1.45;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(90, 30, 50, 0.08);
+  --shadow-md: 0 4px 14px rgba(90, 30, 50, 0.10);
+  --shadow-lg: 0 12px 32px rgba(90, 30, 50, 0.18);
+
+  /* Layout */
+  --tap-min: 44px;
+  --header-height: 52px;
+  --tabbar-height: 56px;
+  --content-max: 720px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Layers */
+  --z-header: 10;
+  --z-tabbar: 10;
+  --z-sheet: 100;
+  --z-toast: 200;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #151114;
+    --color-surface: #211A1F;
+    --color-surface-2: #2C232A;
+    --color-elevated: #2A2128;
+    --color-text: #F8EEF1;
+    --color-text-muted: #B9A6AF;
+    --color-text-faint: #85747C;
+    --color-border: #342A31;
+    --color-border-strong: #4A3C45;
+    --color-accent: #FF6F9C;
+    --color-accent-strong: #FF8FB2;
+    --color-accent-soft: #46202F;
+    --color-on-accent: #2A0F1B;
+    --color-success: #5BD39A;
+    --color-success-soft: #173326;
+    --color-warning: #F2B552;
+    --color-warning-soft: #3A2C12;
+    --color-danger: #FF7B84;
+    --color-danger-soft: #45191D;
+    --color-overlay: rgba(0, 0, 0, 0.6);
+    --color-focus: #FF8FB2;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ---------- Reset ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--color-bg);
+}
+
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
+  overflow-wrap: break-word;
+  -webkit-touch-callout: none;
+}
+
+#app {
+  min-height: 100dvh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+ul, ol {
+  padding: 0;
+  list-style: none;
+}
+
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+/* 16px minimum on form controls: prevents iOS Safari from zooming on focus */
+button, input, select, textarea {
+  font: inherit;
+  font-size: max(16px, 1em);
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input, select, textarea {
+  border-radius: 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+textarea {
+  resize: vertical;
+}
+
+/* Minimum tap targets */
+button,
+select,
+summary,
+[role="button"],
+[role="tab"],
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"] {
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+select,
+textarea {
+  min-height: var(--tap-min);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+}
+
+:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+::placeholder {
+  color: var(--color-text-faint);
+  opacity: 1;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Safe-area helpers ---------- */
+
+.safe-top    { padding-top: var(--safe-top); }
+.safe-bottom { padding-bottom: var(--safe-bottom); }
+.safe-left   { padding-left: var(--safe-left); }
+.safe-right  { padding-right: var(--safe-right); }
+.safe-x      { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+.safe-all {
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* ---------- Utilities ---------- */
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Initial loading state (index.html) ---------- */
+
+.app-loading {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: calc(var(--safe-top) + var(--space-6)) var(--space-6) calc(var(--safe-bottom) + var(--space-6));
+  text-align: center;
+}
+
+.app-loading__logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 22%;
+  box-shadow: var(--shadow-md);
+}
+
+.app-loading__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+}
+
+.app-loading__spinner {
+  width: 28px;
+  height: 28px;
+  margin-top: var(--space-2);
+  border: 3px solid var(--color-accent-soft);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: app-loading-spin 0.8s linear infinite;
+}
+
+.app-loading__text {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.app-loading__retry {
+  margin-top: var(--space-2);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: var(--weight-semibold);
+}
+
+@keyframes app-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- No-JavaScript message ---------- */
+
+.noscript-message {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: center;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
